@@ -1,0 +1,54 @@
+I'll help you write a prompt that would allow recreation and modification of this script. Here's a comprehensive prompt that captures the key requirements and functionality:
+
+
+
+Create a bash script that processes archive files (.tar.gz and .7z) with the following requirements:
+
+Core Functionality:
+- Scan a specified directory for .tar.gz and .7z archive files
+- Extract archives to a specified output directory using 'tar' and '7z' commands
+- After successful extraction, either:
+  - Move the archive to an archive directory, or
+  - Remove the archive file, or
+  - Mark the archive as processed by creating an empty marker file
+
+Configuration Priority (highest to lowest):
+1. Command line arguments
+2. Environment variables
+3. .env file
+
+Required Command Line Options:
+- -s, --search: Directory to scan for archives (default: ".")
+- -o, --output: Directory to extract archives to (optional)
+- -a, --archive: Directory to move processed archives to (optional)
+- -m, --mark: Mark file extension (default: ".mark", empty to disable)
+- -r, --remove: Remove archives after processing
+- -v, --verbose: Enable verbose logging
+- -p, --pretend: Show operations without executing them
+- -h, --help: Show usage information
+
+Environment Variables (same names as options):
+SEARCH, OUTPUT, ARCHIVE, MARK, REMOVE, VERBOSE, PRETEND
+
+Operational Requirements:
+1. Check for required commands (tar, 7z) before processing
+2. Create output/archive directories as needed
+3. Skip already processed files if mark file exists
+4. Verbose mode should log all operations
+5. Pretend mode should show intended operations without executing them
+6. Process files based on extension:
+   - .tar.gz: Use tar xzf command
+   - .7z: Use 7z x command
+7. Consider a non-empty and non-"0" value as true for boolean options
+8. Handle errors and provide appropriate feedback
+9. Only scan the specified directory (no recursion)
+10. Clear logging with capitalized action messages
+
+Post-processing Logic:
+1. If OUTPUT is set: Extract to output directory
+2. Then, choose one of these actions (in priority order):
+   - If ARCHIVE is set: Move archive to archive directory
+   - If REMOVE is true: Delete the archive
+   - If MARK is not empty: Create mark file (unless it exists)
+
+Please implement this script with proper error handling, verbose logging, and maintainable code structure. The script should be usable in both Linux and Windows (WSL/Git Bash) environments.

@@ -1,0 +1,67 @@
+I'll help create an updated version of the script with your requested changes. Here's a comprehensive prompt that would generate the modified script:
+
+Create a bash script for archive extraction with the following requirements:
+
+Core Functionality:
+- Scan a specified directory for archive files (.tar.gz, .tar.7z, .tar.bz2, .tar.xz, .7z, .zip)
+- Extract archives to a specified output directory using appropriate commands
+- After extraction: move to archive directory, remove, or mark as processed
+- Track number of successfully processed archives and return as exit code
+
+Configuration Priority (highest to lowest):
+1. Command line arguments
+2. Environment variables
+3. .env file
+
+Command Line Options:
+- -s, --search: Directory to scan for archives (default: ".")
+- -o, --output: Directory to extract archives to (optional)
+- -a, --archive: Directory to move processed archives to (optional)
+- -m, --mark: Mark file extension (default: ".mark", empty to disable)
+- -r, --remove: Remove archives after processing
+- -v, --verbose: Enable detailed logging
+- -q, --quiet: Suppress all non-error output
+- -p, --pretend: Show operations without executing them
+- -h, --help: Show usage information
+
+Environment Variables (same names as options):
+SEARCH, OUTPUT, ARCHIVE, MARK, REMOVE, VERBOSE, QUIET, PRETEND
+
+Archive Handling:
+1. Support multiple archive formats:
+   - .tar.gz: tar xzf
+   - .tar.7z: tar with 7z
+   - .tar.bz2: tar xjf
+   - .tar.xz: tar xJf
+   - .7z: 7z x
+   - .zip: Try unzip first, fallback to 7z
+2. Don't pre-check for commands - check when needed
+3. Skip archives if required command is missing (with warning)
+4. Count successfully processed archives
+5. Exit codes:
+   - Positive: Number of archives processed
+   - Zero: No archives processed
+   - Negative: Errors occurred
+
+Output Control:
+1. Default mode (QUIET not set):
+   - Print start/completion messages
+   - Show progress information
+   - Display warnings
+2. Quiet mode (QUIET set):
+   - Show only error messages
+3. Verbose mode:
+   - Show configuration settings
+   - Display detailed operation logs
+4. All messages should be direct (no [INFO] prefix)
+
+Post-processing Logic:
+1. If OUTPUT is set: Extract to output directory
+2. Then, choose one (in priority order):
+   - If ARCHIVE is set: Move to archive directory
+   - If REMOVE is true: Delete the archive
+   - If MARK is not empty: Create mark file (unless exists)
+
+Please implement this script with proper error handling and maintainable code structure. The script should be usable in both Linux and Windows (WSL/Git Bash) environments.
+
+This prompt captures all the original functionality plus your requested changes regarding message formatting, additional archive support, command checking, exit codes, and the new quiet mode option.
