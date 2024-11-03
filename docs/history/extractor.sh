@@ -9,6 +9,7 @@ OUTPUT=""
 ARCHIVE=""
 MARK=".mark"
 REMOVE=""
+CONFIG=".env"
 
 # Function to display usage information
 show_help() {
@@ -16,6 +17,7 @@ show_help() {
 Usage: $(basename "$0") [options]
 
 Options:
+  -c, --config ENV    Optional configuration file (default: ".env")
   -s, --search DIR    Directory to scan for archives (default: ".")
   -o, --output DIR    Directory to extract archives to
   -a, --archive DIR   Directory to move processed archives to
@@ -26,7 +28,7 @@ Options:
   -p, --pretend       Show operations without executing them
   -h, --help          Show this help message
 
-Environment variables: SEARCH, OUTPUT, ARCHIVE, MARK, REMOVE, VERBOSE, QUIET, PRETEND
+Environment variables: CONFIG, SEARCH, OUTPUT, ARCHIVE, MARK, REMOVE, VERBOSE, QUIET, PRETEND
 EOF
     exit 0
 }
@@ -53,7 +55,7 @@ extract_archive() {
     local file=$1
     local output_dir=${2:-.}
     local success=false
-    
+
     case "${file,,}" in
         *.tar.gz)
             if check_command tar; then
@@ -97,7 +99,7 @@ extract_archive() {
                 log warning "unzip not found, using 7z as fallback for $file"
                 7z x "$file" -o"$output_dir" && success=true
             else
-                log warning "neither unzip nor 7z command found, skipping $file"
+                log warning "Neither unzip nor 7z command found, skipping $file"
             fi
             ;;
         *)
@@ -105,14 +107,14 @@ extract_archive() {
             return 1
             ;;
     esac
-    
+
     $success
 }
 
 # Function to process an archive after extraction
 post_process() {
     local file=$1
-    
+
     if [[ -n $ARCHIVE ]]; then
         if [[ -n $PRETEND && $PRETEND != "0" ]]; then
             log verbose "Would move $file to $ARCHIVE/"
@@ -141,6 +143,7 @@ post_process() {
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -c|--config)  CONFIG="$2"; shift 2 ;;
         -s|--search)  SEARCH="$2"; shift 2 ;;
         -o|--output)  OUTPUT="$2"; shift 2 ;;
         -a|--archive) ARCHIVE="$2"; shift 2 ;;
@@ -155,14 +158,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Load environment variables from .env file if it exists
-if [[ -f .env ]]; then
+if [[ -f "$CONFIG" ]]; then
     # shellcheck disable=SC1091
-    source .env
+    source "$CONFIG"
 fi
 
-# Set defaults
-SEARCH=${SEARCH:-.}
-MARK=${MARK:-.mark}
+# Set variables
 processed=0
 errors=0
 
@@ -204,13 +205,13 @@ log info "Scanning directory: $SEARCH"
 
 while IFS= read -r -d '' file; do
     log verbose "Processing: $file"
-    
+
     if [[ -n $PRETEND && $PRETEND != "0" ]]; then
         log verbose "Would extract: $file"
         ((processed++))
         continue
     fi
-    
+
     if extract_archive "$file" "${OUTPUT:-.}"; then
         if post_process "$file"; then
             log info "Successfully processed: $file"
