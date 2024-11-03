@@ -177,6 +177,7 @@ fi
 # Set local variables
 processed=0
 errors=0
+skipped=0
 limit=100
 
 # Validate directories
@@ -221,6 +222,13 @@ while IFS= read -r -d '' file; do
         break
     fi
 
+    # Check for mark file if MARK is set
+    if [[ -n $MARK && -f "$file$MARK" ]]; then
+        log verbose "Skipping already processed file: $file"
+        ((skipped++))
+        continue
+    fi
+
     log verbose "Processing: $file"
 
     if [[ -n $PRETEND && $PRETEND != "0" ]]; then
@@ -247,6 +255,7 @@ done < <(find "$SEARCH" -maxdepth 1 -type f \( -name "*.tar.gz" -o -name "*.tar.
 if [[ -z $QUIET || $QUIET == "0" ]]; then
     log info "Processing complete:"
     log info "  Archives processed: $processed"
+    [[ $skipped -gt 0 ]] && log info "  Archives skipped: $skipped"
     [[ $errors -gt 0 ]] && log info "  Errors encountered: $errors"
 fi
 
