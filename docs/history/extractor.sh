@@ -10,6 +10,7 @@ ARCHIVE=""
 MARK=".mark"
 REMOVE=""
 CONFIG=".env"
+MAX_FILES=100
 
 # Function to display usage information
 show_help() {
@@ -24,11 +25,13 @@ Options:
   -m, --mark EXT      Mark file extension (default: ".mark", empty to disable)
   -r, --remove        Remove archives after processing
   -v, --verbose       Enable detailed logging
-  -q, --quiet         Suppress all non-error output
-  -p, --pretend       Show operations without executing them
-  -h, --help          Show this help message
+  -q, --quiet        Suppress all non-error output
+  -p, --pretend      Show operations without executing them
+  -h, --help         Show this help message
 
 Environment variables: CONFIG, SEARCH, OUTPUT, ARCHIVE, MARK, REMOVE, VERBOSE, QUIET, PRETEND
+
+Note: Processing is limited to $MAX_FILES files per run.
 EOF
     exit 0
 }
@@ -175,6 +178,7 @@ fi
 # Set variables
 processed=0
 errors=0
+total_files=0
 
 # Validate directories
 if [[ ! -d $SEARCH ]]; then
@@ -207,12 +211,29 @@ if [[ -n $VERBOSE && $VERBOSE != "0" ]]; then
     log verbose "  Mark extension: ${MARK:-disabled}"
     log verbose "  Remove archives: ${REMOVE:-false}"
     log verbose "  Pretend mode: ${PRETEND:-false}"
+    log verbose "  Maximum files: $MAX_FILES"
+fi
+
+# Count total files first
+while IFS= read -r -d '' file; do
+    ((total_files++))
+done < <(find "$SEARCH" -maxdepth 1 -type f \( -name "*.tar.gz" -o -name "*.tar.7z" -o -name "*.tar.bz2" -o -name "*.tar.xz" -o -name "*.7z" -o -name "*.zip" \) -print0)
+
+# Check if we exceed the limit
+if [[ $total_files -gt $MAX_FILES ]]; then
+    log warning "Found $total_files archives, exceeding the limit of $MAX_FILES files per run."
+    log warning "Only the first $MAX_FILES files will be processed."
 fi
 
 # Process archives
 log info "Scanning directory: $SEARCH"
 
 while IFS= read -r -d '' file; do
+    # Check if we've hit the limit
+    if [[ $processed -ge $MAX_FILES ]]; then
+        break
+    fi
+
     log verbose "Processing: $file"
 
     if [[ -n $PRETEND && $PRETEND != "0" ]]; then
@@ -240,6 +261,9 @@ if [[ -z $QUIET || $QUIET == "0" ]]; then
     log info "Processing complete:"
     log info "  Archives processed: $processed"
     [[ $errors -gt 0 ]] && log info "  Errors encountered: $errors"
+    if [[ $total_files -gt $MAX_FILES ]]; then
+        log info "  Remaining unprocessed files: $(( total_files - processed ))"
+    fi
 fi
 
 # Exit with appropriate code
