@@ -5,9 +5,9 @@ SEARCH_DIR="."
 OUTPUT_DIR=""
 ARCHIVE_DIR=""
 MARK=".mark"
-REMOVE_PROCESSED=false
-VERBOSE=false
-PRETEND=false
+REMOVE=""
+VERBOSE=""
+PRETEND=""
 
 # Function to display usage
 show_usage() {
@@ -35,7 +35,7 @@ Environment variables:
     OUTPUT_DIR
     ARCHIVE_DIR
     MARK
-    REMOVE_PROCESSED
+    REMOVE
     VERBOSE
     PRETEND
 EOF
@@ -58,7 +58,7 @@ log_verbose() {
 # Function to log operation messages
 log_operation() {
     if is_true "$PRETEND"; then
-        echo "[PRETEND] Would $1"
+        echo "[PRETEND] Would: $1"
     else
         log_verbose "$1"
     fi
@@ -78,13 +78,13 @@ load_env_file() {
             value=$(echo "$value" | tr -d '"' | tr -d "'" | xargs)
             
             case "$key" in
-                SEARCH_DIR)       SEARCH_DIR="$value" ;;
-                OUTPUT_DIR)       OUTPUT_DIR="$value" ;;
-                ARCHIVE_DIR)      ARCHIVE_DIR="$value" ;;
-                MARK)            MARK="$value" ;;
-                REMOVE_PROCESSED) REMOVE_PROCESSED="$value" ;;
-                VERBOSE)         VERBOSE="$value" ;;
-                PRETEND)         PRETEND="$value" ;;
+                SEARCH_DIR)  SEARCH_DIR="$value" ;;
+                OUTPUT_DIR)  OUTPUT_DIR="$value" ;;
+                ARCHIVE_DIR) ARCHIVE_DIR="$value" ;;
+                MARK)       MARK="$value" ;;
+                REMOVE)     REMOVE="$value" ;;
+                VERBOSE)    VERBOSE="$value" ;;
+                PRETEND)    PRETEND="$value" ;;
             esac
         done < ".env"
     fi
@@ -97,7 +97,7 @@ load_environment() {
     [ ! -z "${OUTPUT_DIR}" ] && OUTPUT_DIR="${OUTPUT_DIR}"
     [ ! -z "${ARCHIVE_DIR}" ] && ARCHIVE_DIR="${ARCHIVE_DIR}"
     [ ! -z "${MARK}" ] && MARK="${MARK}"
-    [ ! -z "${REMOVE_PROCESSED}" ] && REMOVE_PROCESSED="${REMOVE_PROCESSED}"
+    [ ! -z "${REMOVE}" ] && REMOVE="${REMOVE}"
     [ ! -z "${VERBOSE}" ] && VERBOSE="${VERBOSE}"
     [ ! -z "${PRETEND}" ] && PRETEND="${PRETEND}"
 }
@@ -123,15 +123,15 @@ parse_arguments() {
                 shift 2
                 ;;
             -r|--remove)
-                REMOVE_PROCESSED=true
+                REMOVE="1"
                 shift
                 ;;
             -v|--verbose)
-                VERBOSE=true
+                VERBOSE="1"
                 shift
                 ;;
             -p|--pretend)
-                PRETEND=true
+                PRETEND="1"
                 shift
                 ;;
             -h|--help)
@@ -172,9 +172,9 @@ process_archive() {
     
     # Check if file is already processed (if mark option is set)
     if [ -n "$MARK" ] && [ -f "$mark_file" ]; then
-        log_verbose "Skipping $archive_file - already processed (mark file exists)"
+        log_verbose "Skipping $archive_file - Already processed (mark file exists)"
         return 0
-    }
+    fi
     
     log_verbose "Processing archive: $archive_file"
     
@@ -182,19 +182,19 @@ process_archive() {
     if [ -n "$OUTPUT_DIR" ]; then
         # Create extraction directory if it doesn't exist
         if is_true "$PRETEND"; then
-            log_operation "create directory: $OUTPUT_DIR"
+            log_operation "Create directory: $OUTPUT_DIR"
         else
             mkdir -p "$OUTPUT_DIR"
         fi
         
         # Extract based on file extension
         if [[ "$archive_file" == *.tar.gz ]]; then
-            log_operation "extract tar.gz archive: $archive_file to $OUTPUT_DIR"
+            log_operation "Extract tar.gz archive: $archive_file to $OUTPUT_DIR"
             if ! is_true "$PRETEND"; then
                 tar xzf "$archive_file" -C "$OUTPUT_DIR"
             fi
         elif [[ "$archive_file" == *.7z ]]; then
-            log_operation "extract 7z archive: $archive_file to $OUTPUT_DIR"
+            log_operation "Extract 7z archive: $archive_file to $OUTPUT_DIR"
             if ! is_true "$PRETEND"; then
                 7z x "$archive_file" -o"$OUTPUT_DIR"
             fi
@@ -207,20 +207,20 @@ process_archive() {
         
         if [ ! -z "$ARCHIVE_DIR" ]; then
             if is_true "$PRETEND"; then
-                log_operation "create directory: $ARCHIVE_DIR"
-                log_operation "move $archive_file to $ARCHIVE_DIR/$base_name"
+                log_operation "Create directory: $ARCHIVE_DIR"
+                log_operation "Move $archive_file to $ARCHIVE_DIR/$base_name"
             else
                 mkdir -p "$ARCHIVE_DIR"
                 mv "$archive_file" "$ARCHIVE_DIR/"
             fi
-        elif is_true "$REMOVE_PROCESSED"; then
-            log_operation "remove file: $archive_file"
+        elif is_true "$REMOVE"; then
+            log_operation "Remove file: $archive_file"
             if ! is_true "$PRETEND"; then
                 rm "$archive_file"
             fi
         elif [ -n "$MARK" ]; then
             if [ ! -f "$mark_file" ]; then
-                log_operation "create mark file: $mark_file"
+                log_operation "Create mark file: $mark_file"
                 if ! is_true "$PRETEND"; then
                     touch "$mark_file"
                 fi
@@ -261,9 +261,9 @@ if is_true "$VERBOSE"; then
     echo "  Output directory: $OUTPUT_DIR"
     echo "  Archive directory: $ARCHIVE_DIR"
     echo "  Mark extension: ${MARK:-"<disabled>"}"
-    echo "  Remove processed: $REMOVE_PROCESSED"
-    echo "  Verbose: $VERBOSE"
-    echo "  Pretend: $PRETEND"
+    echo "  Remove archives: ${REMOVE:-"<disabled>"}"
+    echo "  Verbose output: ${VERBOSE:-"<disabled>"}"
+    echo "  Pretend mode: ${PRETEND:-"<disabled>"}"
 fi
 
 # Check for required commands
