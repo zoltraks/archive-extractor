@@ -140,14 +140,23 @@ post_process() {
     return 0
 }
 
+# Check if command line option parameter has a value
+check_parameter_value() {
+    local option_name="$1"
+    if [[ -z "$2" ]]; then
+        log error "Missing value for the $option_name option"
+        exit 255
+    fi
+}
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -c|--config)  CONFIG="$2"; shift 2 ;;
-        -s|--search)  SEARCH="$2"; shift 2 ;;
-        -o|--output)  OUTPUT="$2"; shift 2 ;;
-        -a|--archive) ARCHIVE="$2"; shift 2 ;;
-        -m|--mark)    MARK="$2"; shift 2 ;;
+        -c|--config)  check_parameter_value "$@" ; CONFIG="$2"; shift 2 ;;
+        -s|--search)  check_parameter_value "$@" ; SEARCH="$2"; shift 2 ;;
+        -o|--output)  check_parameter_value "$@" ; OUTPUT="$2"; shift 2 ;;
+        -a|--archive) check_parameter_value "$@" ; ARCHIVE="$2"; shift 2 ;;
+        -m|--mark)    check_parameter_value "$@" ; MARK="$2"; shift 2 ;;
         -r|--remove)  REMOVE="1"; shift ;;
         -v|--verbose) VERBOSE="1"; shift ;;
         -q|--quiet)   QUIET="1"; shift ;;
