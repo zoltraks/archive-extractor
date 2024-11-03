@@ -55,51 +55,51 @@ check_command() {
 # Function to extract an archive
 extract_archive() {
     local file=$1
-    local output_dir=${2:-.}
+    local output=${2:-.}
     local success=false
 
     case "${file,,}" in
         *.tar.gz)
             if check_command tar; then
-                tar xzf "$file" -C "$output_dir" && success=true
+                tar xzf "$file" -C "$output" && success=true
             else
-                log warning "tar command not found, skipping $file"
+                log warning "Command tar not found, skipping $file"
             fi
             ;;
         *.tar.7z)
             if check_command tar && check_command 7z; then
-                7z x -so "$file" | tar x -C "$output_dir" && success=true
+                7z x -so "$file" | tar x -C "$output" && success=true
             else
-                log warning "tar or 7z command not found, skipping $file"
+                log warning "Command tar or 7z not found, skipping $file"
             fi
             ;;
         *.tar.bz2)
             if check_command tar; then
-                tar xjf "$file" -C "$output_dir" && success=true
+                tar xjf "$file" -C "$output" && success=true
             else
-                log warning "tar command not found, skipping $file"
+                log warning "Command tar not found, skipping $file"
             fi
             ;;
         *.tar.xz)
             if check_command tar; then
-                tar xJf "$file" -C "$output_dir" && success=true
+                tar xJf "$file" -C "$output" && success=true
             else
-                log warning "tar command not found, skipping $file"
+                log warning "Command tar not found, skipping $file"
             fi
             ;;
         *.7z)
             if check_command 7z; then
-                7z x "$file" -o"$output_dir" && success=true
+                7z x -aoa "$file" -o"$output" && success=true
             else
-                log warning "7z command not found, skipping $file"
+                log warning "Command 7z not found, skipping $file"
             fi
             ;;
         *.zip)
             if check_command unzip; then
-                unzip -q "$file" -d "$output_dir" && success=true
+                unzip -q -o "$file" -d "$output" && success=true
             elif check_command 7z; then
-                log warning "unzip not found, using 7z as fallback for $file"
-                7z x "$file" -o"$output_dir" && success=true
+                log warning "Command unzip not found, using 7z as fallback for $file"
+                7z x -aoa "$file" -o"$output" && success=true
             else
                 log warning "Neither unzip nor 7z command found, skipping $file"
             fi
@@ -174,7 +174,7 @@ if [[ -f "$CONFIG" ]]; then
     source "$CONFIG"
 fi
 
-# Set variables
+# Set local variables
 processed=0
 errors=0
 limit=100
@@ -210,7 +210,6 @@ if [[ -n $VERBOSE && $VERBOSE != "0" ]]; then
     log verbose "  Mark extension: ${MARK:-disabled}"
     log verbose "  Remove archives: ${REMOVE:-false}"
     log verbose "  Pretend mode: ${PRETEND:-false}"
-    log verbose "  File limit: $limit"
 fi
 
 # Process archives
@@ -218,7 +217,7 @@ log info "Scanning directory: $SEARCH"
 
 while IFS= read -r -d '' file; do
     if [[ $processed -ge $limit ]]; then
-        log warning "Reached limit of $limit files. Stopping processing."
+        log warning "Reached limit of $limit files."
         break
     fi
 
@@ -235,7 +234,7 @@ while IFS= read -r -d '' file; do
             log info "Successfully processed: $file"
             ((processed++))
         else
-            log error "Failed to post-process: $file"
+            log error "Failed to process: $file"
             ((errors++))
         fi
     else
@@ -253,7 +252,7 @@ fi
 
 # Exit with appropriate code
 if [[ $errors -gt 0 ]]; then
-    exit -1
+    exit 255
 elif [[ $processed -gt 0 ]]; then
     exit "$processed"
 else
