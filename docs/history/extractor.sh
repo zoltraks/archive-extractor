@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+# Default values
+VERBOSE=""
+PRETEND=""
+QUIET=""
+SEARCH="."
+OUTPUT=""
+ARCHIVE=""
+MARK=".mark"
+REMOVE=""
+
 # Function to display usage information
 show_help() {
     cat << EOF
