@@ -1,0 +1,53 @@
+----------
+
+Let's create a program as bash script that can be run in Linux or Bash in Windows environment.
+Program will scan specified directory or directories for archive file.
+For each archive file found it will extract file contents to a specified directory or current directory and after that it will move archive file to archive directory if specified or mark it by creating empty ".mark" file or completely remove archive file.
+It will use "tar" command for ".tar.gz" archives and "7z" command for files.
+At the begining let's assume that execution options will be read from .env file if it exists, environment variables if they were set.
+Propose set of program options in a bash script and implement reading from .env file overriden by environment setting and further with command line options.
+
+----------
+
+let's call environment variables without "ARCHIVE_" prefix, use them as they are, i.e. "VERBOSE". 
+Implement directory scanning for supported files (.tar.gz and .7z), write out additional information about reading directory, files found and extraction process steps.
+For each supported file, perform extraction.
+
+----------
+
+apply these code style fixes: 
+- change "SCAN_DIRS" to "SEARCH_DIR" and "scan-dirs" option to "search"
+- change "EXTRACT_DIR" to "OUTPUT_DIR" and "extract-dirs" option to "output"
+- change "archive-dir" option to "archive"
+
+apply these changes:
+- assume that an option like "VERBOSE" is set to true if it is not empty and not "0"
+- add PRETEND option as and when it is set to true, operations would not be taken, program will only print what will be done
+- only one directory will be scanned for archive files
+- mark option should have value of file name extension, like ".mark" - use ".mark" as default value for mark option but allow to disable mark file creation by simple setting mark option to an empty value
+- if mark option for each archive file found check if mark file exists and if that so, omit file and print log message about this situation
+
+----------
+
+implement operation that will move extracted archive file to output directory if it is set.
+create output directory if needed.
+if output directory was not set but remove option was set then archive file should be removed.
+if output directory is not set and remove option is not true and mark file name extension is not empty, then create empty mark file with file name of original archive file with trailing mark file name extension but don't overwrite if it exists.
+
+----------
+
+apply these code style fixes: 
+- change "REMOVE_PROCESSED" to "REMOVE"
+- don't use "false" word, use empty value to set option to be a false
+- start every log message with capital letter, i.e. "Create directory" instead of "create directory"
+
+----------
+
+apply these code style fixes: 
+- change "ARCHIVE_DIR" to "ARCHIVE"
+- change "SEARCH_DIR" to "SEARCH"
+- change "OUTPUT_DIR" to "OUTPUT"
+
+----------
+
+==========
