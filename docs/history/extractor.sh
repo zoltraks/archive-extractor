@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Default values
-SEARCH_DIR="."
-OUTPUT_DIR=""
-ARCHIVE_DIR=""
+SEARCH="."
+OUTPUT=""
+ARCHIVE=""
 MARK=".mark"
 REMOVE=""
 VERBOSE=""
@@ -31,9 +31,9 @@ Configuration can be set via:
     3. Command line arguments (highest priority)
 
 Environment variables:
-    SEARCH_DIR
-    OUTPUT_DIR
-    ARCHIVE_DIR
+    SEARCH
+    OUTPUT
+    ARCHIVE
     MARK
     REMOVE
     VERBOSE
@@ -78,13 +78,13 @@ load_env_file() {
             value=$(echo "$value" | tr -d '"' | tr -d "'" | xargs)
             
             case "$key" in
-                SEARCH_DIR)  SEARCH_DIR="$value" ;;
-                OUTPUT_DIR)  OUTPUT_DIR="$value" ;;
-                ARCHIVE_DIR) ARCHIVE_DIR="$value" ;;
-                MARK)       MARK="$value" ;;
-                REMOVE)     REMOVE="$value" ;;
-                VERBOSE)    VERBOSE="$value" ;;
-                PRETEND)    PRETEND="$value" ;;
+                SEARCH)  SEARCH="$value" ;;
+                OUTPUT)  OUTPUT="$value" ;;
+                ARCHIVE) ARCHIVE="$value" ;;
+                MARK)    MARK="$value" ;;
+                REMOVE)  REMOVE="$value" ;;
+                VERBOSE) VERBOSE="$value" ;;
+                PRETEND) PRETEND="$value" ;;
             esac
         done < ".env"
     fi
@@ -93,9 +93,9 @@ load_env_file() {
 # Function to load environment variables
 load_environment() {
     # Override .env file settings with environment variables if they exist
-    [ ! -z "${SEARCH_DIR}" ] && SEARCH_DIR="${SEARCH_DIR}"
-    [ ! -z "${OUTPUT_DIR}" ] && OUTPUT_DIR="${OUTPUT_DIR}"
-    [ ! -z "${ARCHIVE_DIR}" ] && ARCHIVE_DIR="${ARCHIVE_DIR}"
+    [ ! -z "${SEARCH}" ] && SEARCH="${SEARCH}"
+    [ ! -z "${OUTPUT}" ] && OUTPUT="${OUTPUT}"
+    [ ! -z "${ARCHIVE}" ] && ARCHIVE="${ARCHIVE}"
     [ ! -z "${MARK}" ] && MARK="${MARK}"
     [ ! -z "${REMOVE}" ] && REMOVE="${REMOVE}"
     [ ! -z "${VERBOSE}" ] && VERBOSE="${VERBOSE}"
@@ -107,15 +107,15 @@ parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -s|--search)
-                SEARCH_DIR="$2"
+                SEARCH="$2"
                 shift 2
                 ;;
             -o|--output)
-                OUTPUT_DIR="$2"
+                OUTPUT="$2"
                 shift 2
                 ;;
             -a|--archive)
-                ARCHIVE_DIR="$2"
+                ARCHIVE="$2"
                 shift 2
                 ;;
             -m|--mark)
@@ -179,24 +179,24 @@ process_archive() {
     log_verbose "Processing archive: $archive_file"
     
     # Handle extraction
-    if [ -n "$OUTPUT_DIR" ]; then
+    if [ -n "$OUTPUT" ]; then
         # Create extraction directory if it doesn't exist
         if is_true "$PRETEND"; then
-            log_operation "Create directory: $OUTPUT_DIR"
+            log_operation "Create directory: $OUTPUT"
         else
-            mkdir -p "$OUTPUT_DIR"
+            mkdir -p "$OUTPUT"
         fi
         
         # Extract based on file extension
         if [[ "$archive_file" == *.tar.gz ]]; then
-            log_operation "Extract tar.gz archive: $archive_file to $OUTPUT_DIR"
+            log_operation "Extract tar.gz archive: $archive_file to $OUTPUT"
             if ! is_true "$PRETEND"; then
-                tar xzf "$archive_file" -C "$OUTPUT_DIR"
+                tar xzf "$archive_file" -C "$OUTPUT"
             fi
         elif [[ "$archive_file" == *.7z ]]; then
-            log_operation "Extract 7z archive: $archive_file to $OUTPUT_DIR"
+            log_operation "Extract 7z archive: $archive_file to $OUTPUT"
             if ! is_true "$PRETEND"; then
-                7z x "$archive_file" -o"$OUTPUT_DIR"
+                7z x "$archive_file" -o"$OUTPUT"
             fi
         fi
     fi
@@ -205,13 +205,13 @@ process_archive() {
     if [ $? -eq 0 ] || is_true "$PRETEND"; then
         log_verbose "Extraction successful"
         
-        if [ ! -z "$ARCHIVE_DIR" ]; then
+        if [ ! -z "$ARCHIVE" ]; then
             if is_true "$PRETEND"; then
-                log_operation "Create directory: $ARCHIVE_DIR"
-                log_operation "Move $archive_file to $ARCHIVE_DIR/$base_name"
+                log_operation "Create directory: $ARCHIVE"
+                log_operation "Move $archive_file to $ARCHIVE/$base_name"
             else
-                mkdir -p "$ARCHIVE_DIR"
-                mv "$archive_file" "$ARCHIVE_DIR/"
+                mkdir -p "$ARCHIVE"
+                mv "$archive_file" "$ARCHIVE/"
             fi
         elif is_true "$REMOVE"; then
             log_operation "Remove file: $archive_file"
@@ -236,17 +236,17 @@ process_archive() {
 
 # Function to scan directory and process archives
 scan_and_process() {
-    log_verbose "Scanning directory: $SEARCH_DIR"
+    log_verbose "Scanning directory: $SEARCH"
     
-    if [ ! -d "$SEARCH_DIR" ]; then
-        echo "Error: Directory not found: $SEARCH_DIR"
+    if [ ! -d "$SEARCH" ]; then
+        echo "Error: Directory not found: $SEARCH"
         exit 1
     fi
     
     # Find and process archives
     while IFS= read -r -d '' file; do
         process_archive "$file"
-    done < <(find "$SEARCH_DIR" -maxdepth 1 -type f \( -name "*.tar.gz" -o -name "*.7z" \) -print0)
+    done < <(find "$SEARCH" -maxdepth 1 -type f \( -name "*.tar.gz" -o -name "*.7z" \) -print0)
 }
 
 # Main initialization
@@ -257,9 +257,9 @@ parse_arguments "$@"
 # Validate configuration
 if is_true "$VERBOSE"; then
     echo "Configuration:"
-    echo "  Search directory: $SEARCH_DIR"
-    echo "  Output directory: $OUTPUT_DIR"
-    echo "  Archive directory: $ARCHIVE_DIR"
+    echo "  Search directory: $SEARCH"
+    echo "  Output directory: $OUTPUT"
+    echo "  Archive directory: $ARCHIVE"
     echo "  Mark extension: ${MARK:-"<disabled>"}"
     echo "  Remove archives: ${REMOVE:-"<disabled>"}"
     echo "  Verbose output: ${VERBOSE:-"<disabled>"}"
