@@ -1,276 +1,233 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Default values
-SEARCH="."
-OUTPUT=""
-ARCHIVE=""
-MARK=".mark"
-REMOVE=""
-VERBOSE=""
-PRETEND=""
-
-# Function to display usage
-show_usage() {
+# Function to display usage information
+show_help() {
     cat << EOF
 Usage: $(basename "$0") [options]
-Process archive files in specified directory.
 
 Options:
-    -s, --search        Directory to search for archives
-    -o, --output        Directory to extract archives to
-    -a, --archive       Directory to move processed archives to
-    -m, --mark          Mark file extension (default: .mark, empty to disable)
-    -r, --remove        Remove archives after processing
-    -v, --verbose       Enable verbose output
-    -p, --pretend      Show what would be done without actual processing
-    -h, --help         Show this help message
+  -s, --search DIR    Directory to scan for archives (default: ".")
+  -o, --output DIR    Directory to extract archives to
+  -a, --archive DIR   Directory to move processed archives to
+  -m, --mark EXT      Mark file extension (default: ".mark", empty to disable)
+  -r, --remove        Remove archives after processing
+  -v, --verbose       Enable detailed logging
+  -q, --quiet         Suppress all non-error output
+  -p, --pretend       Show operations without executing them
+  -h, --help          Show this help message
 
-Configuration can be set via:
-    1. .env file
-    2. Environment variables
-    3. Command line arguments (highest priority)
-
-Environment variables:
-    SEARCH
-    OUTPUT
-    ARCHIVE
-    MARK
-    REMOVE
-    VERBOSE
-    PRETEND
+Environment variables: SEARCH, OUTPUT, ARCHIVE, MARK, REMOVE, VERBOSE, QUIET, PRETEND
 EOF
-    exit 1
+    exit 0
 }
 
-# Function to check if a value should be considered "true"
-is_true() {
-    local value="$1"
-    [[ -n "$value" && "$value" != "0" ]]
+# Function to log messages based on verbosity
+log() {
+    local level=$1
+    shift
+    case $level in
+        error)   [[ -t 2 ]] && echo "$@" >&2 ;;
+        warning) [[ $QUIET != true ]] && echo "$@" >&2 ;;
+        info)    [[ $QUIET != true ]] && echo "$@" ;;
+        verbose) [[ $VERBOSE == true ]] && echo "$@" ;;
+    esac
 }
 
-# Function to log messages when verbose mode is enabled
-log_verbose() {
-    if is_true "$VERBOSE"; then
-        echo "[INFO] $1"
+# Function to check if a command exists
+check_command() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Function to extract an archive
+extract_archive() {
+    local file=$1
+    local output_dir=${2:-.}
+    local success=false
+    
+    case "${file,,}" in
+        *.tar.gz)
+            if check_command tar; then
+                tar xzf "$file" -C "$output_dir" && success=true
+            else
+                log warning "tar command not found, skipping $file"
+            fi
+            ;;
+        *.tar.7z)
+            if check_command tar && check_command 7z; then
+                7z x -so "$file" | tar x -C "$output_dir" && success=true
+            else
+                log warning "tar or 7z command not found, skipping $file"
+            fi
+            ;;
+        *.tar.bz2)
+            if check_command tar; then
+                tar xjf "$file" -C "$output_dir" && success=true
+            else
+                log warning "tar command not found, skipping $file"
+            fi
+            ;;
+        *.tar.xz)
+            if check_command tar; then
+                tar xJf "$file" -C "$output_dir" && success=true
+            else
+                log warning "tar command not found, skipping $file"
+            fi
+            ;;
+        *.7z)
+            if check_command 7z; then
+                7z x "$file" -o"$output_dir" && success=true
+            else
+                log warning "7z command not found, skipping $file"
+            fi
+            ;;
+        *.zip)
+            if check_command unzip; then
+                unzip -q "$file" -d "$output_dir" && success=true
+            elif check_command 7z; then
+                log warning "unzip not found, using 7z as fallback for $file"
+                7z x "$file" -o"$output_dir" && success=true
+            else
+                log warning "neither unzip nor 7z command found, skipping $file"
+            fi
+            ;;
+        *)
+            log warning "Unsupported archive format: $file"
+            return 1
+            ;;
+    esac
+    
+    $success
+}
+
+# Function to process an archive after extraction
+post_process() {
+    local file=$1
+    
+    if [[ -n $ARCHIVE ]]; then
+        if [[ $PRETEND == true ]]; then
+            log verbose "Would move $file to $ARCHIVE/"
+        else
+            mv "$file" "$ARCHIVE/" || return 1
+        fi
+    elif [[ $REMOVE == true ]]; then
+        if [[ $PRETEND == true ]]; then
+            log verbose "Would remove $file"
+        else
+            rm "$file" || return 1
+        fi
+    elif [[ -n $MARK ]]; then
+        local mark_file="$file$MARK"
+        if [[ ! -f $mark_file ]]; then
+            if [[ $PRETEND == true ]]; then
+                log verbose "Would create mark file $mark_file"
+            else
+                touch "$mark_file" || return 1
+            fi
+        fi
     fi
-}
-
-# Function to log operation messages
-log_operation() {
-    if is_true "$PRETEND"; then
-        echo "[PRETEND] Would: $1"
-    else
-        log_verbose "$1"
-    fi
-}
-
-# Function to load .env file if it exists
-load_env_file() {
-    if [ -f ".env" ]; then
-        log_verbose "Loading .env file"
-        while IFS='=' read -r key value || [ -n "$key" ]; do
-            # Skip comments and empty lines
-            [[ $key =~ ^[[:space:]]*# ]] && continue
-            [[ -z "$key" ]] && continue
-            
-            # Remove leading/trailing whitespace and quotes
-            key=$(echo "$key" | tr -d '"' | tr -d "'" | xargs)
-            value=$(echo "$value" | tr -d '"' | tr -d "'" | xargs)
-            
-            case "$key" in
-                SEARCH)  SEARCH="$value" ;;
-                OUTPUT)  OUTPUT="$value" ;;
-                ARCHIVE) ARCHIVE="$value" ;;
-                MARK)    MARK="$value" ;;
-                REMOVE)  REMOVE="$value" ;;
-                VERBOSE) VERBOSE="$value" ;;
-                PRETEND) PRETEND="$value" ;;
-            esac
-        done < ".env"
-    fi
-}
-
-# Function to load environment variables
-load_environment() {
-    # Override .env file settings with environment variables if they exist
-    [ ! -z "${SEARCH}" ] && SEARCH="${SEARCH}"
-    [ ! -z "${OUTPUT}" ] && OUTPUT="${OUTPUT}"
-    [ ! -z "${ARCHIVE}" ] && ARCHIVE="${ARCHIVE}"
-    [ ! -z "${MARK}" ] && MARK="${MARK}"
-    [ ! -z "${REMOVE}" ] && REMOVE="${REMOVE}"
-    [ ! -z "${VERBOSE}" ] && VERBOSE="${VERBOSE}"
-    [ ! -z "${PRETEND}" ] && PRETEND="${PRETEND}"
+    return 0
 }
 
 # Parse command line arguments
-parse_arguments() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -s|--search)
-                SEARCH="$2"
-                shift 2
-                ;;
-            -o|--output)
-                OUTPUT="$2"
-                shift 2
-                ;;
-            -a|--archive)
-                ARCHIVE="$2"
-                shift 2
-                ;;
-            -m|--mark)
-                MARK="$2"
-                shift 2
-                ;;
-            -r|--remove)
-                REMOVE="1"
-                shift
-                ;;
-            -v|--verbose)
-                VERBOSE="1"
-                shift
-                ;;
-            -p|--pretend)
-                PRETEND="1"
-                shift
-                ;;
-            -h|--help)
-                show_usage
-                ;;
-            *)
-                echo "Unknown option: $1"
-                show_usage
-                ;;
-        esac
-    done
-}
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -s|--search)  SEARCH="$2"; shift 2 ;;
+        -o|--output)  OUTPUT="$2"; shift 2 ;;
+        -a|--archive) ARCHIVE="$2"; shift 2 ;;
+        -m|--mark)    MARK="$2"; shift 2 ;;
+        -r|--remove)  REMOVE=true; shift ;;
+        -v|--verbose) VERBOSE=true; shift ;;
+        -q|--quiet)   QUIET=true; shift ;;
+        -p|--pretend) PRETEND=true; shift ;;
+        -h|--help)    show_help ;;
+        *)            log error "Unknown option: $1"; exit 1 ;;
+    esac
+done
 
-# Function to check if required commands are available
-check_requirements() {
-    local missing_commands=()
-    
-    if ! command -v tar &> /dev/null; then
-        missing_commands+=("tar")
-    fi
-    
-    if ! command -v 7z &> /dev/null; then
-        missing_commands+=("7z")
-    fi
-    
-    if [ ${#missing_commands[@]} -ne 0 ]; then
-        echo "Error: Required commands not found: ${missing_commands[*]}"
-        echo "Please install the missing packages and try again."
-        exit 1
-    fi
-}
-
-# Function to process a single archive file
-process_archive() {
-    local archive_file="$1"
-    local base_name=$(basename "$archive_file")
-    local mark_file="${archive_file}${MARK}"
-    
-    # Check if file is already processed (if mark option is set)
-    if [ -n "$MARK" ] && [ -f "$mark_file" ]; then
-        log_verbose "Skipping $archive_file - Already processed (mark file exists)"
-        return 0
-    fi
-    
-    log_verbose "Processing archive: $archive_file"
-    
-    # Handle extraction
-    if [ -n "$OUTPUT" ]; then
-        # Create extraction directory if it doesn't exist
-        if is_true "$PRETEND"; then
-            log_operation "Create directory: $OUTPUT"
-        else
-            mkdir -p "$OUTPUT"
-        fi
-        
-        # Extract based on file extension
-        if [[ "$archive_file" == *.tar.gz ]]; then
-            log_operation "Extract tar.gz archive: $archive_file to $OUTPUT"
-            if ! is_true "$PRETEND"; then
-                tar xzf "$archive_file" -C "$OUTPUT"
-            fi
-        elif [[ "$archive_file" == *.7z ]]; then
-            log_operation "Extract 7z archive: $archive_file to $OUTPUT"
-            if ! is_true "$PRETEND"; then
-                7z x "$archive_file" -o"$OUTPUT"
-            fi
-        fi
-    fi
-    
-    # Process the extracted archive
-    if [ $? -eq 0 ] || is_true "$PRETEND"; then
-        log_verbose "Extraction successful"
-        
-        if [ ! -z "$ARCHIVE" ]; then
-            if is_true "$PRETEND"; then
-                log_operation "Create directory: $ARCHIVE"
-                log_operation "Move $archive_file to $ARCHIVE/$base_name"
-            else
-                mkdir -p "$ARCHIVE"
-                mv "$archive_file" "$ARCHIVE/"
-            fi
-        elif is_true "$REMOVE"; then
-            log_operation "Remove file: $archive_file"
-            if ! is_true "$PRETEND"; then
-                rm "$archive_file"
-            fi
-        elif [ -n "$MARK" ]; then
-            if [ ! -f "$mark_file" ]; then
-                log_operation "Create mark file: $mark_file"
-                if ! is_true "$PRETEND"; then
-                    touch "$mark_file"
-                fi
-            else
-                log_verbose "Mark file already exists: $mark_file"
-            fi
-        fi
-    else
-        echo "Error: Failed to extract $archive_file"
-        return 1
-    fi
-}
-
-# Function to scan directory and process archives
-scan_and_process() {
-    log_verbose "Scanning directory: $SEARCH"
-    
-    if [ ! -d "$SEARCH" ]; then
-        echo "Error: Directory not found: $SEARCH"
-        exit 1
-    fi
-    
-    # Find and process archives
-    while IFS= read -r -d '' file; do
-        process_archive "$file"
-    done < <(find "$SEARCH" -maxdepth 1 -type f \( -name "*.tar.gz" -o -name "*.7z" \) -print0)
-}
-
-# Main initialization
-load_env_file
-load_environment
-parse_arguments "$@"
-
-# Validate configuration
-if is_true "$VERBOSE"; then
-    echo "Configuration:"
-    echo "  Search directory: $SEARCH"
-    echo "  Output directory: $OUTPUT"
-    echo "  Archive directory: $ARCHIVE"
-    echo "  Mark extension: ${MARK:-"<disabled>"}"
-    echo "  Remove archives: ${REMOVE:-"<disabled>"}"
-    echo "  Verbose output: ${VERBOSE:-"<disabled>"}"
-    echo "  Pretend mode: ${PRETEND:-"<disabled>"}"
+# Load environment variables from .env file if it exists
+if [[ -f .env ]]; then
+    # shellcheck disable=SC1091
+    source .env
 fi
 
-# Check for required commands
-check_requirements
+# Set defaults
+SEARCH=${SEARCH:-.}
+MARK=${MARK:-.mark}
+processed=0
+errors=0
 
-# Start processing
-log_verbose "Starting archive processing"
-scan_and_process
-log_verbose "Archive processing completed"
+# Validate directories
+if [[ ! -d $SEARCH ]]; then
+    log error "Search directory does not exist: $SEARCH"
+    exit 1
+fi
+
+if [[ -n $OUTPUT && ! -d $OUTPUT ]]; then
+    if [[ $PRETEND == true ]]; then
+        log verbose "Would create output directory: $OUTPUT"
+    else
+        mkdir -p "$OUTPUT" || exit 1
+    fi
+fi
+
+if [[ -n $ARCHIVE && ! -d $ARCHIVE ]]; then
+    if [[ $PRETEND == true ]]; then
+        log verbose "Would create archive directory: $ARCHIVE"
+    else
+        mkdir -p "$ARCHIVE" || exit 1
+    fi
+fi
+
+# Show configuration in verbose mode
+if [[ $VERBOSE == true ]]; then
+    log verbose "Configuration:"
+    log verbose "  Search directory: $SEARCH"
+    log verbose "  Output directory: ${OUTPUT:-not set}"
+    log verbose "  Archive directory: ${ARCHIVE:-not set}"
+    log verbose "  Mark extension: ${MARK:-disabled}"
+    log verbose "  Remove archives: ${REMOVE:-false}"
+    log verbose "  Pretend mode: ${PRETEND:-false}"
+fi
+
+# Process archives
+log info "Scanning directory: $SEARCH"
+
+while IFS= read -r -d '' file; do
+    log verbose "Processing: $file"
+    
+    if [[ $PRETEND == true ]]; then
+        log verbose "Would extract: $file"
+        ((processed++))
+        continue
+    fi
+    
+    if extract_archive "$file" "${OUTPUT:-.}"; then
+        if post_process "$file"; then
+            log info "Successfully processed: $file"
+            ((processed++))
+        else
+            log error "Failed to post-process: $file"
+            ((errors++))
+        fi
+    else
+        log error "Failed to extract: $file"
+        ((errors++))
+    fi
+done < <(find "$SEARCH" -maxdepth 1 -type f \( -name "*.tar.gz" -o -name "*.tar.7z" -o -name "*.tar.bz2" -o -name "*.tar.xz" -o -name "*.7z" -o -name "*.zip" \) -print0)
+
+# Show summary
+if [[ $QUIET != true ]]; then
+    log info "Processing complete:"
+    log info "  Archives processed: $processed"
+    [[ $errors -gt 0 ]] && log info "  Errors encountered: $errors"
+fi
+
+# Exit with appropriate code
+if [[ $errors -gt 0 ]]; then
+    exit -1
+elif [[ $processed -gt 0 ]]; then
+    exit "$processed"
+else
+    exit 0
+fi
 
