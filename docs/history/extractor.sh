@@ -89,7 +89,7 @@ extract_archive() {
             ;;
         *.7z)
             if check_command 7z; then
-                7z x -aoa "$file" -o"$output" && success=true
+                7z x -aoa -bd "$file" -o"$output" > /dev/null && success=true
             else
                 log warning "Command 7z not found, skipping $file"
             fi
@@ -99,7 +99,7 @@ extract_archive() {
                 unzip -q -o "$file" -d "$output" && success=true
             elif check_command 7z; then
                 log warning "Command unzip not found, using 7z as fallback for $file"
-                7z x -aoa "$file" -o"$output" && success=true
+                7z x -aoa -bd "$file" -o"$output" > /dev/null && success=true
             else
                 log warning "Neither unzip nor 7z command found, skipping $file"
             fi
