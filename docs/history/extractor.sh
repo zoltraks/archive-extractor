@@ -37,9 +37,9 @@ log() {
     shift
     case $level in
         error)   [[ -t 2 ]] && echo "$@" >&2 ;;
-        warning) [[ $QUIET != true ]] && echo "$@" >&2 ;;
-        info)    [[ $QUIET != true ]] && echo "$@" ;;
-        verbose) [[ $VERBOSE == true ]] && echo "$@" ;;
+        warning) [[ -z $QUIET || $QUIET == "0" ]] && echo "$@" >&2 ;;
+        info)    [[ -z $QUIET || $QUIET == "0" ]] && echo "$@" ;;
+        verbose) [[ -n $VERBOSE && $VERBOSE != "0" ]] && echo "$@" ;;
     esac
 }
 
@@ -114,13 +114,13 @@ post_process() {
     local file=$1
     
     if [[ -n $ARCHIVE ]]; then
-        if [[ $PRETEND == true ]]; then
+        if [[ -n $PRETEND && $PRETEND != "0" ]]; then
             log verbose "Would move $file to $ARCHIVE/"
         else
             mv "$file" "$ARCHIVE/" || return 1
         fi
-    elif [[ $REMOVE == true ]]; then
-        if [[ $PRETEND == true ]]; then
+    elif [[ -n $REMOVE && $REMOVE != "0" ]]; then
+        if [[ -n $PRETEND && $PRETEND != "0" ]]; then
             log verbose "Would remove $file"
         else
             rm "$file" || return 1
@@ -128,7 +128,7 @@ post_process() {
     elif [[ -n $MARK ]]; then
         local mark_file="$file$MARK"
         if [[ ! -f $mark_file ]]; then
-            if [[ $PRETEND == true ]]; then
+            if [[ -n $PRETEND && $PRETEND != "0" ]]; then
                 log verbose "Would create mark file $mark_file"
             else
                 touch "$mark_file" || return 1
@@ -145,10 +145,10 @@ while [[ $# -gt 0 ]]; do
         -o|--output)  OUTPUT="$2"; shift 2 ;;
         -a|--archive) ARCHIVE="$2"; shift 2 ;;
         -m|--mark)    MARK="$2"; shift 2 ;;
-        -r|--remove)  REMOVE=true; shift ;;
-        -v|--verbose) VERBOSE=true; shift ;;
-        -q|--quiet)   QUIET=true; shift ;;
-        -p|--pretend) PRETEND=true; shift ;;
+        -r|--remove)  REMOVE="1"; shift ;;
+        -v|--verbose) VERBOSE="1"; shift ;;
+        -q|--quiet)   QUIET="1"; shift ;;
+        -p|--pretend) PRETEND="1"; shift ;;
         -h|--help)    show_help ;;
         *)            log error "Unknown option: $1"; exit 1 ;;
     esac
@@ -173,7 +173,7 @@ if [[ ! -d $SEARCH ]]; then
 fi
 
 if [[ -n $OUTPUT && ! -d $OUTPUT ]]; then
-    if [[ $PRETEND == true ]]; then
+    if [[ -n $PRETEND && $PRETEND != "0" ]]; then
         log verbose "Would create output directory: $OUTPUT"
     else
         mkdir -p "$OUTPUT" || exit 1
@@ -181,7 +181,7 @@ if [[ -n $OUTPUT && ! -d $OUTPUT ]]; then
 fi
 
 if [[ -n $ARCHIVE && ! -d $ARCHIVE ]]; then
-    if [[ $PRETEND == true ]]; then
+    if [[ -n $PRETEND && $PRETEND != "0" ]]; then
         log verbose "Would create archive directory: $ARCHIVE"
     else
         mkdir -p "$ARCHIVE" || exit 1
@@ -189,7 +189,7 @@ if [[ -n $ARCHIVE && ! -d $ARCHIVE ]]; then
 fi
 
 # Show configuration in verbose mode
-if [[ $VERBOSE == true ]]; then
+if [[ -n $VERBOSE && $VERBOSE != "0" ]]; then
     log verbose "Configuration:"
     log verbose "  Search directory: $SEARCH"
     log verbose "  Output directory: ${OUTPUT:-not set}"
@@ -205,7 +205,7 @@ log info "Scanning directory: $SEARCH"
 while IFS= read -r -d '' file; do
     log verbose "Processing: $file"
     
-    if [[ $PRETEND == true ]]; then
+    if [[ -n $PRETEND && $PRETEND != "0" ]]; then
         log verbose "Would extract: $file"
         ((processed++))
         continue
@@ -226,7 +226,7 @@ while IFS= read -r -d '' file; do
 done < <(find "$SEARCH" -maxdepth 1 -type f \( -name "*.tar.gz" -o -name "*.tar.7z" -o -name "*.tar.bz2" -o -name "*.tar.xz" -o -name "*.7z" -o -name "*.zip" \) -print0)
 
 # Show summary
-if [[ $QUIET != true ]]; then
+if [[ -z $QUIET || $QUIET == "0" ]]; then
     log info "Processing complete:"
     log info "  Archives processed: $processed"
     [[ $errors -gt 0 ]] && log info "  Errors encountered: $errors"
@@ -240,4 +240,3 @@ elif [[ $processed -gt 0 ]]; then
 else
     exit 0
 fi
-
