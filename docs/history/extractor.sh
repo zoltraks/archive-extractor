@@ -29,19 +29,27 @@ Configuration can be set via:
     3. Command line arguments (highest priority)
 
 Environment variables:
-    ARCHIVE_SCAN_DIRS
-    ARCHIVE_EXTRACT_DIR
-    ARCHIVE_STORE_DIR
-    ARCHIVE_MARK_PROCESSED
-    ARCHIVE_REMOVE_PROCESSED
-    ARCHIVE_VERBOSE
+    SCAN_DIRS
+    EXTRACT_DIR
+    ARCHIVE_DIR
+    MARK_PROCESSED
+    REMOVE_PROCESSED
+    VERBOSE
 EOF
     exit 1
+}
+
+# Function to log messages when verbose mode is enabled
+log_verbose() {
+    if [ "$VERBOSE" = true ]; then
+        echo "[INFO] $1"
+    fi
 }
 
 # Function to load .env file if it exists
 load_env_file() {
     if [ -f ".env" ]; then
+        log_verbose "Loading .env file"
         while IFS='=' read -r key value || [ -n "$key" ]; do
             # Skip comments and empty lines
             [[ $key =~ ^[[:space:]]*# ]] && continue
@@ -52,12 +60,12 @@ load_env_file() {
             value=$(echo "$value" | tr -d '"' | tr -d "'" | xargs)
             
             case "$key" in
-                ARCHIVE_SCAN_DIRS)      SCAN_DIRS="$value" ;;
-                ARCHIVE_EXTRACT_DIR)    EXTRACT_DIR="$value" ;;
-                ARCHIVE_STORE_DIR)      ARCHIVE_DIR="$value" ;;
-                ARCHIVE_MARK_PROCESSED) MARK_PROCESSED=$(echo "$value" | tr '[:upper:]' '[:lower:]') ;;
-                ARCHIVE_REMOVE_PROCESSED) REMOVE_PROCESSED=$(echo "$value" | tr '[:upper:]' '[:lower:]') ;;
-                ARCHIVE_VERBOSE)        VERBOSE=$(echo "$value" | tr '[:upper:]' '[:lower:]') ;;
+                SCAN_DIRS)       SCAN_DIRS="$value" ;;
+                EXTRACT_DIR)     EXTRACT_DIR="$value" ;;
+                ARCHIVE_DIR)     ARCHIVE_DIR="$value" ;;
+                MARK_PROCESSED)  MARK_PROCESSED=$(echo "$value" | tr '[:upper:]' '[:lower:]') ;;
+                REMOVE_PROCESSED) REMOVE_PROCESSED=$(echo "$value" | tr '[:upper:]' '[:lower:]') ;;
+                VERBOSE)         VERBOSE=$(echo "$value" | tr '[:upper:]' '[:lower:]') ;;
             esac
         done < ".env"
     fi
@@ -66,12 +74,12 @@ load_env_file() {
 # Function to load environment variables
 load_environment() {
     # Override .env file settings with environment variables if they exist
-    [ ! -z "${ARCHIVE_SCAN_DIRS}" ] && SCAN_DIRS="${ARCHIVE_SCAN_DIRS}"
-    [ ! -z "${ARCHIVE_EXTRACT_DIR}" ] && EXTRACT_DIR="${ARCHIVE_EXTRACT_DIR}"
-    [ ! -z "${ARCHIVE_STORE_DIR}" ] && ARCHIVE_DIR="${ARCHIVE_STORE_DIR}"
-    [ ! -z "${ARCHIVE_MARK_PROCESSED}" ] && MARK_PROCESSED=$(echo "${ARCHIVE_MARK_PROCESSED}" | tr '[:upper:]' '[:lower:]')
-    [ ! -z "${ARCHIVE_REMOVE_PROCESSED}" ] && REMOVE_PROCESSED=$(echo "${ARCHIVE_REMOVE_PROCESSED}" | tr '[:upper:]' '[:lower:]')
-    [ ! -z "${ARCHIVE_VERBOSE}" ] && VERBOSE=$(echo "${ARCHIVE_VERBOSE}" | tr '[:upper:]' '[:lower:]')
+    [ ! -z "${SCAN_DIRS}" ] && SCAN_DIRS="${SCAN_DIRS}"
+    [ ! -z "${EXTRACT_DIR}" ] && EXTRACT_DIR="${EXTRACT_DIR}"
+    [ ! -z "${ARCHIVE_DIR}" ] && ARCHIVE_DIR="${ARCHIVE_DIR}"
+    [ ! -z "${MARK_PROCESSED}" ] && MARK_PROCESSED=$(echo "${MARK_PROCESSED}" | tr '[:upper:]' '[:lower:]')
+    [ ! -z "${REMOVE_PROCESSED}" ] && REMOVE_PROCESSED=$(echo "${REMOVE_PROCESSED}" | tr '[:upper:]' '[:lower:]')
+    [ ! -z "${VERBOSE}" ] && VERBOSE=$(echo "${VERBOSE}" | tr '[:upper:]' '[:lower:]')
 }
 
 # Parse command line arguments
@@ -113,6 +121,87 @@ parse_arguments() {
     done
 }
 
+# Function to check if required commands are available
+check_requirements() {
+    local missing_commands=()
+    
+    if ! command -v tar &> /dev/null; then
+        missing_commands+=("tar")
+    fi
+    
+    if ! command -v 7z &> /dev/null; then
+        missing_commands+=("7z")
+    fi
+    
+    if [ ${#missing_commands[@]} -ne 0 ]; then
+        echo "Error: Required commands not found: ${missing_commands[*]}"
+        echo "Please install the missing packages and try again."
+        exit 1
+    fi
+}
+
+# Function to process a single archive file
+process_archive() {
+    local archive_file="$1"
+    local base_name=$(basename "$archive_file")
+    local extract_path="$EXTRACT_DIR"
+    
+    log_verbose "Processing archive: $archive_file"
+    
+    # Create extraction directory if it doesn't exist
+    mkdir -p "$extract_path"
+    
+    # Extract based on file extension
+    if [[ "$archive_file" == *.tar.gz ]]; then
+        log_verbose "Extracting tar.gz archive..."
+        tar xzf "$archive_file" -C "$extract_path"
+    elif [[ "$archive_file" == *.7z ]]; then
+        log_verbose "Extracting 7z archive..."
+        7z x "$archive_file" -o"$extract_path"
+    fi
+    
+    # Process the extracted archive
+    if [ $? -eq 0 ]; then
+        log_verbose "Extraction successful"
+        
+        if [ ! -z "$ARCHIVE_DIR" ]; then
+            log_verbose "Moving archive to: $ARCHIVE_DIR/$base_name"
+            mkdir -p "$ARCHIVE_DIR"
+            mv "$archive_file" "$ARCHIVE_DIR/"
+        elif [ "$MARK_PROCESSED" = true ]; then
+            log_verbose "Marking archive as processed"
+            touch "${archive_file}.mark"
+        elif [ "$REMOVE_PROCESSED" = true ]; then
+            log_verbose "Removing processed archive"
+            rm "$archive_file"
+        fi
+    else
+        echo "Error: Failed to extract $archive_file"
+        return 1
+    fi
+}
+
+# Function to scan directories and process archives
+scan_and_process() {
+    local IFS=','
+    local dirs=($SCAN_DIRS)
+    
+    for dir in "${dirs[@]}"; do
+        dir=$(echo "$dir" | xargs)  # Trim whitespace
+        log_verbose "Scanning directory: $dir"
+        
+        if [ ! -d "$dir" ]; then
+            echo "Warning: Directory not found: $dir"
+            continue
+        fi
+        
+        # Find and process archives
+        while IFS= read -r -d '' file; do
+            process_archive "$file"
+        done < <(find "$dir" -type f \( -name "*.tar.gz" -o -name "*.7z" \) -print0)
+    done
+}
+
 # Main initialization
 load_env_file
 load_environment
@@ -139,4 +228,12 @@ if [ "$REMOVE_PROCESSED" = true ] && [ ! -z "$ARCHIVE_DIR" ]; then
     echo "Error: Cannot both remove and move processed archives"
     exit 1
 fi
+
+# Check for required commands
+check_requirements
+
+# Start processing
+log_verbose "Starting archive processing"
+scan_and_process
+log_verbose "Archive processing completed"
 
